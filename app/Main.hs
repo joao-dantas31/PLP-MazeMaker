@@ -10,21 +10,16 @@ import Graphics.Gloss.Interface.Pure.Game
 data MoveDirection
   = East
   | West
+  | North
+  | South
   | None
-  deriving (Eq)
-
-data Heading
-  = FacingWest
-  | FacingEast
   deriving (Eq)
 
 data GameState =
   GameState
     { position :: Point
     , direction :: MoveDirection
-    , heading :: Heading
     , currentLevel :: Level
-    , spriteCount :: Int
     , speedX :: Float
     , speedY :: Float
     }
@@ -39,7 +34,7 @@ tileSize :: Float
 tileSize = 32.0
 
 window :: Display
-window = InWindow "Play w. Gloss" (1024, 768) (0, 0)
+window = InWindow "Mazemaker" (1568, 800) (0, 0)
 
 background :: Color
 background = makeColor 0.2 0.1 0.1 1
@@ -54,11 +49,11 @@ isHit (b1x, b1y) (b2x, b2y) =
 
 makeRow :: String -> Int -> Level
 makeRow row y =
-  [ ( ( (fromIntegral x * tileSize) - ((1024 / 2) - (tileSize / 2))
-      , (fromIntegral y * tileSize) - ((768 / 2) - (tileSize / 2)))
+  [ ( ( (fromIntegral x * tileSize) - ((1568 / 2) - (tileSize / 2))
+      , (fromIntegral y * tileSize) - ((800 / 2) - (tileSize / 2)))
     , row !! x)
   | x <- [0 .. length row - 1]
-  , row !! x == '*' || row !! x == '%'
+  , row !! x == '#' || row !! x == '*'
   ]
 
 prepareData :: [String] -> Level
@@ -66,14 +61,14 @@ prepareData rawData =
   concat [makeRow (rawData !! y) y | y <- [0 .. length rawData - 1]]
 
 whatImg :: Cell -> Picture -> Picture -> Picture
-whatImg (_, cellType) tile food =
-  if cellType == '*'
+whatImg (_, cellType) tile obj =
+  if cellType == '#'
     then tile
-    else food
+    else obj
 
 drawTile :: Cell -> Picture -> Picture -> Picture
-drawTile cell tileImg foodImg =
-  uncurry translate (fst cell) (whatImg cell tileImg foodImg)
+drawTile cell tileImg caseImg =
+  uncurry translate (fst cell) (whatImg cell tileImg caseImg)
 
 render :: GameState -> [Picture] -> Picture
 render gs imgs =
@@ -82,46 +77,27 @@ render gs imgs =
      [ translate
          (fst (position gs))
          (snd (position gs) + 10)
-         (imgs !! (spriteCount gs + 2 + isRight (heading gs)))
+         (imgs !! 2)
      ])
-
-isRight :: Heading -> Int
-isRight FacingEast = 6
-isRight _ = 0
-
-incSprite :: GameState -> Int
-incSprite gs =
-  if direction gs /= None
-    then if spriteCount gs == 5
-           then 0
-           else spriteCount gs + 1
-    else spriteCount gs
 
 handleKeys :: Event -> GameState -> GameState
 handleKeys (EventKey (SpecialKey KeyLeft) Down _ _) gs =
-  gs {direction = West, heading = FacingWest}
+  gs {direction = West}
 handleKeys (EventKey (SpecialKey KeyRight) Down _ _) gs =
-  gs {direction = East, heading = FacingEast}
-handleKeys (EventKey (SpecialKey KeySpace) Down _ _) gs =
-  gs
-    { speedY =
-        if isCollision gs (fst (position gs), snd (position gs) + speedY gs) '*'
-          then 6
-          else (-6)
-    }
+  gs {direction = East}
+handleKeys (EventKey (SpecialKey KeyUp ) Down _ _) gs =
+  gs {direction = North}
+handleKeys (EventKey (SpecialKey KeyDown ) Down _ _) gs =
+  gs {direction = South}
 handleKeys _ gs = gs {direction = None}
-
-checkFood :: GameState -> Level
-checkFood gs =
-  filter
-    (\cell -> not (isHit (fst cell) (position gs) && snd cell == '%'))
-    (currentLevel gs)
 
 checkSpeedY :: GameState -> Float
 checkSpeedY gs
-  | isCollision gs (fst (position gs), snd (position gs) + speedY gs) '*' = -3
-  | speedY gs >= -6 = speedY gs - 0.1
-  | otherwise = -6
+  | direction gs == North || direction gs == South =
+    if speedY gs > 5.0
+      then 5.0
+      else speedY gs + 0.5
+  | otherwise = 0
 
 checkSpeedX :: GameState -> Float
 checkSpeedX gs
@@ -129,10 +105,7 @@ checkSpeedX gs
     if speedX gs > 5.0
       then 5.0
       else speedX gs + 0.5
-  | otherwise =
-    if speedX gs <= 0
-      then 0
-      else speedX gs - 0.5
+  | otherwise = 0
 
 isCollision :: GameState -> Point -> CellType -> Bool
 isCollision gs pnt checkType =
@@ -142,7 +115,7 @@ isCollision gs pnt checkType =
 
 moveX :: MoveDirection -> GameState -> Point
 moveX East gs =
-  if not (isCollision gs (fst (position gs) + speedX gs, snd (position gs)) '*')
+  if not (isCollision gs (fst (position gs) + speedX gs, snd (position gs)) '#')
     then (fst (position gs) + speedX gs, snd (position gs))
     else position gs
 moveX West gs =
@@ -150,70 +123,50 @@ moveX West gs =
        (isCollision
           gs
           (fst (position gs) + speedX gs * (-1), snd (position gs))
-          '*')
+          '#')
     then (fst (position gs) + speedX gs * (-1), snd (position gs))
     else position gs
-moveX _ gs =
-  if speedX gs > 0 &&
-     not
+moveX _ gs = position gs
+
+moveY :: MoveDirection -> GameState -> Point -> Point
+moveY North gs pnt =
+  if not
        (isCollision
           gs
-          ( fst (position gs) +
-            speedX gs *
-            (if heading gs == FacingWest
-               then (-1)
-               else 1)
-          , snd (position gs))
-          '*')
-    then ( fst (position gs) +
-           speedX gs *
-           (if heading gs == FacingWest
-              then (-1)
-              else 1)
-         , snd (position gs))
-    else position gs
-
-moveY :: GameState -> Point -> Point
-moveY gs pnt =
-  if not (isCollision gs (fst pnt, snd pnt + speedY gs) '*')
+          (fst pnt, snd pnt + speedY gs)
+          '#')
     then (fst pnt, snd pnt + speedY gs)
     else pnt
+moveY South gs pnt =
+  if not
+       (isCollision
+          gs
+          (fst pnt, snd pnt  + speedY gs * (-1))
+          '#')
+    then (fst pnt, snd pnt  + speedY gs * (-1))
+    else pnt
+moveY _ gs pnt = pnt
 
 update :: Float -> GameState -> GameState
 update _ gs =
   gs
     { speedY = checkSpeedY gs
     , speedX = checkSpeedX gs
-    , position = moveY gs $ moveX (direction gs) gs
-    , spriteCount = incSprite gs
-    , currentLevel = checkFood gs
+    , position = moveY (direction gs) gs $ moveX (direction gs) gs
     }
 
 main :: IO ()
 main = do
   tileImg <- loadBMP "assets/tile.bmp"
-  foodImg <- loadBMP "assets/food.bmp"
-  left1 <- loadBMP "assets/left1.bmp"
-  left2 <- loadBMP "assets/left2.bmp"
-  left3 <- loadBMP "assets/left3.bmp"
-  left4 <- loadBMP "assets/left4.bmp"
-  left5 <- loadBMP "assets/left5.bmp"
-  left6 <- loadBMP "assets/left6.bmp"
-  right1 <- loadBMP "assets/right1.bmp"
-  right2 <- loadBMP "assets/right2.bmp"
-  right3 <- loadBMP "assets/right3.bmp"
-  right4 <- loadBMP "assets/right4.bmp"
-  right5 <- loadBMP "assets/right5.bmp"
-  right6 <- loadBMP "assets/right6.bmp"
+  caseImg <- loadBMP "assets/case.bmp"
+  char <- loadBMP "assets/spy.bmp"
   rawData <- readFile "assets/level"
   let level = prepareData $ reverse $ lines rawData
   let state =
         GameState
-          { position = (0.0, 0.0)
+          { position = (0.0, 325.0)
           , direction = None
           , currentLevel = level
-          , spriteCount = 0
-          , heading = FacingWest
           , speedX = 0
           , speedY = (-6)
           }
@@ -223,19 +176,8 @@ main = do
     fps
     state
     (`render` [ tileImg
-              , foodImg
-              , left1
-              , left2
-              , left3
-              , left4
-              , left5
-              , left6
-              , right1
-              , right2
-              , right3
-              , right4
-              , right5
-              , right6
+              , caseImg
+              , char
               ])
     handleKeys
     update
