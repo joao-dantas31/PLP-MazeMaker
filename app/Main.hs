@@ -7,6 +7,8 @@ import Graphics.Gloss
 
 import Graphics.Gloss.Interface.Pure.Game
 
+import NewLib
+
 data MoveDirection
   = East
   | West
@@ -33,11 +35,17 @@ type Level = [Cell]
 tileSize :: Float
 tileSize = 32.0
 
+winSize :: (Int, Int)
+winSize = (1568, 900)
+
+initialPosition :: (Float, Float)
+initialPosition = ((fromIntegral(fst winSize) / 2 - 64) * (-1), (fromIntegral(snd winSize) / 2 - 48) * (-1))
+
 window :: Display
-window = InWindow "Mazemaker" (1568, 800) (0, 0)
+window = InWindow "Mazemaker" winSize (0, 0)
 
 background :: Color
-background = makeColor 0.2 0.1 0.1 1
+background = makeColor 0.1 0.4 0.1 1
 
 fps :: Int
 fps = 60
@@ -50,7 +58,7 @@ isHit (b1x, b1y) (b2x, b2y) =
 makeRow :: String -> Int -> Level
 makeRow row y =
   [ ( ( (fromIntegral x * tileSize) - ((1568 / 2) - (tileSize / 2))
-      , (fromIntegral y * tileSize) - ((800 / 2) - (tileSize / 2)))
+      , (fromIntegral y * tileSize) - ((800 / 2) - (tileSize / 2) + 50))
     , row !! x)
   | x <- [0 .. length row - 1]
   , row !! x == '#' || row !! x == '*'
@@ -89,6 +97,14 @@ handleKeys (EventKey (SpecialKey KeyUp ) Down _ _) gs =
   gs {direction = North}
 handleKeys (EventKey (SpecialKey KeyDown ) Down _ _) gs =
   gs {direction = South}
+handleKeys (EventKey ((Char '1') ) Down _ _) gs =
+  gs {position = initialPosition, currentLevel = prepareData $ reverse $ mocData 1}
+handleKeys (EventKey ((Char '2') ) Down _ _) gs =
+  gs {position = initialPosition, currentLevel = prepareData $ reverse $ mocData 2}
+handleKeys (EventKey ((Char '3') ) Down _ _) gs =
+  gs {position = initialPosition, currentLevel = prepareData $ reverse $ mocData 3}
+handleKeys (EventKey ((Char '4') ) Down _ _) gs =
+  gs {position = initialPosition, currentLevel = prepareData $ reverse $ mocData 4}
 handleKeys _ gs = gs {direction = None}
 
 checkSpeedY :: GameState -> Float
@@ -164,7 +180,7 @@ main = do
   let level = prepareData $ reverse $ lines rawData
   let state =
         GameState
-          { position = (0.0, 325.0)
+          { position = initialPosition
           , direction = None
           , currentLevel = level
           , speedX = 0

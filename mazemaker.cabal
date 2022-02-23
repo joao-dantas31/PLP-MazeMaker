@@ -25,7 +25,7 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      NewLib
   other-modules:
       Paths_mazemaker
   hs-source-dirs:
