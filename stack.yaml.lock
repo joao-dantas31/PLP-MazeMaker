@@ -11,6 +11,20 @@ packages:
       sha256: 926a8265fd7a696f8784a7cfc9d638f51edee1aebacb19bda7f71dc5dfbaeee0
   original:
     hackage: gloss-1.13.1.2
+- completed:
+    hackage: random-shuffle-0.0.4@sha256:d0b9783c30208d1ce05caa05139fb00372802edb6c678b73d61b5eb4eebb3aba,818
+    pantry-tree:
+      size: 226
+      sha256: e6e1c894e726443bc7165618de6745812610e70f0df22dbe5c130bafee2c507b
+  original:
+    hackage: random-shuffle-0.0.4
+- completed:
+    hackage: persistent-equivalence-0.3@sha256:3bdcb708ea3bf57270df48b1bae8c6837aee3eef0fdcd63fd0fd2c9bb17e9d54,1528
+    pantry-tree:
+      size: 237
+      sha256: c3eb2f45af27a6655f5caa052a53b97bc26fe62cff8b2aad26344b2f02ecf009
+  original:
+    hackage: persistent-equivalence-0.3
 snapshots:
 - completed:
     size: 532177
