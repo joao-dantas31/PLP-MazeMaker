@@ -26,6 +26,8 @@ source-repository head
 library
   exposed-modules:
       Lib
+      Maze
+      Utils
   other-modules:
       Paths_mazemaker
   hs-source-dirs:
@@ -33,6 +35,8 @@ library
   build-depends:
       base >=4.7 && <5
     , gloss
+    , random
+    , unordered-containers
   default-language: Haskell2010
 
 executable mazemaker-exe
@@ -46,6 +50,6 @@ executable mazemaker-exe
       base >=4.7 && <5
     , gloss
     , mazemaker
-    , persistent-equivalence
-    , random-shuffle
+    , random
+    , unordered-containers
   default-language: Haskell2010
