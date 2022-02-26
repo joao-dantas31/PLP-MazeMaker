@@ -4,5 +4,3 @@ packages:
   - .
 extra-deps:
   - gloss-1.13.1.2
-  - random-shuffle-0.0.4
-  - persistent-equivalence-0.3
