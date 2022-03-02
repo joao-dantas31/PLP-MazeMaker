@@ -7,7 +7,8 @@ import Graphics.Gloss
 
 import Graphics.Gloss.Interface.Pure.Game
 
-import NewLib
+import Maze
+import System.Random
 
 data MoveDirection
   = East
@@ -33,59 +34,69 @@ type Cell = (Point, CellType)
 type Level = [Cell]
 
 tileSize :: Float
-tileSize = 32.0
+tileSize = 10
+
+size :: Int
+size = 25
 
 winSize :: (Int, Int)
-winSize = (1568, 900)
+winSize = (850, 850)
+
+offset :: Float
+offset = fromIntegral (snd winSize-20) / 2
 
 initialPosition :: (Float, Float)
-initialPosition = ((fromIntegral(fst winSize) / 2 - 64) * (-1), (fromIntegral(snd winSize) / 2 - 48) * (-1))
+initialPosition = ((fromIntegral(fst winSize) / 2 - 26) * (-1), (fromIntegral(snd winSize) / 2 - 26) * (-1))
 
 window :: Display
 window = InWindow "Mazemaker" winSize (0, 0)
 
 background :: Color
-background = makeColor 0.1 0.4 0.1 1
+background = makeColor 0.9 0.9 0.9 1
 
 fps :: Int
 fps = 60
 
-isHit :: Point -> Point -> Bool
-isHit (b1x, b1y) (b2x, b2y) =
-  (b1x - 10) < b2x + tileSize &&
-  b1x + 50 - 10 > b2x && b1y < b2y + tileSize && b1y + 54 > b2y
+makeRow :: (Integer, Integer, Char) -> Cell
+makeRow (x,y,dir)
+   | dir == 'U' = (
+                    (c*(fromIntegral y-1)+c/2-offset, h-c*(fromIntegral x-1)-offset)
+                  , 'V')
+   | dir == 'D' = (
+                    (c*(fromIntegral y-1)+c/2-offset, h-c*fromIntegral x-offset)
+                  , 'V')
+   | dir == 'L' = (
+                    (c*(fromIntegral y-1)-offset, h-c/2-c*(fromIntegral x-1)-offset)
+                  , 'H')
+   | dir == 'R' = (
+                    (c*fromIntegral y-offset, h-c/2-c*(fromIntegral x-1)-offset)
+                  , 'H')
+   | otherwise = ((0,0), 'f')
+      where
+         c = scaleFactor (fromIntegral size)
+         h = c * fromIntegral size
 
-makeRow :: String -> Int -> Level
-makeRow row y =
-  [ ( ( (fromIntegral x * tileSize) - ((1568 / 2) - (tileSize / 2))
-      , (fromIntegral y * tileSize) - ((800 / 2) - (tileSize / 2) + 50))
-    , row !! x)
-  | x <- [0 .. length row - 1]
-  , row !! x == '#' || row !! x == '*'
-  ]
+prepareData :: [(Integer, Integer, Char)] -> Level
+prepareData maze = map makeRow (removeDuplicateWalls maze)
 
-prepareData :: [String] -> Level
-prepareData rawData =
-  concat [makeRow (rawData !! y) y | y <- [0 .. length rawData - 1]]
+whatImg :: Cell -> Picture -> Picture -> Picture -> Picture
+whatImg (point, cellType) tile1 tile2 obj
+  | cellType == 'V' = tile1
+  | cellType == 'H' = tile2
+  | otherwise = obj
+      where
+         c = scaleFactor (fromIntegral size)
 
-whatImg :: Cell -> Picture -> Picture -> Picture
-whatImg (_, cellType) tile obj =
-  if cellType == '#'
-    then tile
-    else obj
-
-drawTile :: Cell -> Picture -> Picture -> Picture
-drawTile cell tileImg caseImg =
-  uncurry translate (fst cell) (whatImg cell tileImg caseImg)
+drawTile :: Cell -> Picture -> Picture -> Picture -> Picture
+drawTile cell tileImg1 tileImg2 caseImg =
+  uncurry translate (fst cell) (whatImg cell tileImg1 tileImg2 caseImg)
 
 render :: GameState -> [Picture] -> Picture
 render gs imgs =
   pictures
-    ([drawTile cell (head imgs) (imgs !! 1) | cell <- currentLevel gs] ++
-     [ translate
-         (fst (position gs))
-         (snd (position gs) + 10)
-         (imgs !! 2)
+    ([drawTile cell (head imgs) (imgs !! 1) (imgs !! 2) | cell <- currentLevel gs] ++
+     [ uncurry translate (position gs)
+         (imgs !! 3)
      ])
 
 handleKeys :: Event -> GameState -> GameState
@@ -98,13 +109,7 @@ handleKeys (EventKey (SpecialKey KeyUp ) Down _ _) gs =
 handleKeys (EventKey (SpecialKey KeyDown ) Down _ _) gs =
   gs {direction = South}
 handleKeys (EventKey ((Char '1') ) Down _ _) gs =
-  gs {position = initialPosition, currentLevel = prepareData $ reverse $ mocData 1}
-handleKeys (EventKey ((Char '2') ) Down _ _) gs =
-  gs {position = initialPosition, currentLevel = prepareData $ reverse $ mocData 2}
-handleKeys (EventKey ((Char '3') ) Down _ _) gs =
-  gs {position = initialPosition, currentLevel = prepareData $ reverse $ mocData 3}
-handleKeys (EventKey ((Char '4') ) Down _ _) gs =
-  gs {position = initialPosition, currentLevel = prepareData $ reverse $ mocData 4}
+  gs {position = initialPosition, currentLevel = prepareData (createMaze size (getRandomGen 8))}
 handleKeys _ gs = gs {direction = None}
 
 checkSpeedY :: GameState -> Float
@@ -123,42 +128,54 @@ checkSpeedX gs
       else speedX gs + 0.5
   | otherwise = 0
 
-isCollision :: GameState -> Point -> CellType -> Bool
+
+isHit :: Point -> Point -> CellType -> Bool
+isHit (b1x, b1y) (b2x, b2y) tipo =
+    b1x + 10 > b2x - width  && b1x - 10 < b2x + width &&
+    b1y + 10 > b2y - height && b1y - 10 < b2y + height
+    where
+      (width, height) = if tipo == 'H' then (2, 18) else (18, 2)
+
+isCollision :: GameState -> Point -> [CellType] ->[Cell]
 isCollision gs pnt checkType =
-  any
-    (\((x, y), tileType) -> tileType == checkType && isHit pnt (x, y))
+  filter
+    (\((x, y), tileType) -> tileType `elem` checkType && isHit pnt (x, y) tileType)
     (currentLevel gs)
 
 moveX :: MoveDirection -> GameState -> Point
 moveX East gs =
-  if not (isCollision gs (fst (position gs) + speedX gs, snd (position gs)) '#')
+  if null
+        (isCollision
+          gs
+          (fst (position gs) + speedX gs, snd (position gs))
+          ['H', 'V'])
     then (fst (position gs) + speedX gs, snd (position gs))
     else position gs
 moveX West gs =
-  if not
+  if null
        (isCollision
           gs
           (fst (position gs) + speedX gs * (-1), snd (position gs))
-          '#')
+          ['H', 'V'])
     then (fst (position gs) + speedX gs * (-1), snd (position gs))
     else position gs
 moveX _ gs = position gs
 
 moveY :: MoveDirection -> GameState -> Point -> Point
 moveY North gs pnt =
-  if not
+  if null
        (isCollision
           gs
           (fst pnt, snd pnt + speedY gs)
-          '#')
+          ['H', 'V'])
     then (fst pnt, snd pnt + speedY gs)
     else pnt
 moveY South gs pnt =
-  if not
+  if null
        (isCollision
           gs
           (fst pnt, snd pnt  + speedY gs * (-1))
-          '#')
+          ['H', 'V'])
     then (fst pnt, snd pnt  + speedY gs * (-1))
     else pnt
 moveY _ gs pnt = pnt
@@ -171,27 +188,52 @@ update _ gs =
     , position = moveY (direction gs) gs $ moveX (direction gs) gs
     }
 
+getRandomGen :: Int -> StdGen
+getRandomGen = mkStdGen
+
+removeDuplicateWalls :: [(Integer, Integer, Char)] -> [(Integer, Integer, Char)]
+removeDuplicateWalls [] = []
+removeDuplicateWalls (wall : walls)
+   | getSecondRep wall `elem` walls = removeDuplicateWalls walls
+   | otherwise = wall : removeDuplicateWalls walls
+
+getSecondRep :: (Integer, Integer, Char) -> (Integer, Integer, Char)
+getSecondRep (r, c, w)
+   | w == 'L' = (r, c - 1, 'R')
+   | w == 'R' = (r, c + 1, 'L')
+   | w == 'U' = (r - 1, c, 'D')
+   | w == 'D' = (r + 1, c, 'U')
+   | otherwise = (-1, -1, 'X')
+
+wall :: Float -> Float -> Picture
+wall w h = color black (rectangleSolid w h)
+
+scaleFactor :: Float -> Float
+scaleFactor size = fromIntegral(fst winSize-20) / size
+
 main :: IO ()
 main = do
-  tileImg <- loadBMP "assets/tile.bmp"
+  lase1Img <- loadBMP "assets/lazer1.bmp"
+  lase2Img <- loadBMP "assets/lazer2.bmp"
   caseImg <- loadBMP "assets/case.bmp"
   char <- loadBMP "assets/spy.bmp"
   rawData <- readFile "assets/level"
-  let level = prepareData $ reverse $ lines rawData
+  let level = prepareData (createMaze 25 (getRandomGen 13))
   let state =
         GameState
           { position = initialPosition
           , direction = None
           , currentLevel = level
           , speedX = 0
-          , speedY = (-6)
+          , speedY = 0
           }
   play
     window
     background
     fps
     state
-    (`render` [ tileImg
+    (`render` [ lase1Img
+              , lase2Img
               , caseImg
               , char
               ])
