@@ -4,29 +4,29 @@
 module Main where
 
 import Graphics.Gloss
-
 import Graphics.Gloss.Interface.Pure.Game
+import Maze
+import System.Random
+import System.Environment
+import Data.Int
 
+-- Definição dos tipos usados
 data MoveDirection
   = East
   | West
+  | North
+  | South
   | None
-  deriving (Eq)
-
-data Heading
-  = FacingWest
-  | FacingEast
   deriving (Eq)
 
 data GameState =
   GameState
     { position :: Point
     , direction :: MoveDirection
-    , heading :: Heading
     , currentLevel :: Level
-    , spriteCount :: Int
     , speedX :: Float
     , speedY :: Float
+    , generator :: StdGen
     }
 
 type CellType = Char
@@ -35,114 +35,130 @@ type Cell = (Point, CellType)
 
 type Level = [Cell]
 
+-- Definição de alguns valores fixos e funções uteis
 tileSize :: Float
-tileSize = 32.0
+tileSize = 10
+
+size :: Int
+size = 25
+
+winSize :: (Int, Int)
+winSize = (850, 850)
+
+offset :: Float
+offset = fromIntegral (snd winSize-20) / 2
+
+initialPosition :: (Float, Float)
+initialPosition = ((fromIntegral(fst winSize) / 2 - 26) * (-1), (fromIntegral(snd winSize) / 2 - 26) * (-1))
+
+goalPosition :: (Float, Float)
+goalPosition = (fromIntegral(fst winSize) / 2 - 26, fromIntegral(snd winSize) / 2 - 26)
 
 window :: Display
-window = InWindow "Play w. Gloss" (1024, 768) (0, 0)
+window = InWindow "Mazemaker" winSize (0, 0)
 
 background :: Color
-background = makeColor 0.2 0.1 0.1 1
+background = makeColor 0.9 0.9 0.9 1
 
 fps :: Int
 fps = 60
 
-isHit :: Point -> Point -> Bool
-isHit (b1x, b1y) (b2x, b2y) =
-  (b1x - 10) < b2x + tileSize &&
-  b1x + 50 - 10 > b2x && b1y < b2y + tileSize && b1y + 54 > b2y
+getRandomGen :: Int -> StdGen
+getRandomGen = mkStdGen
 
-makeRow :: String -> Int -> Level
-makeRow row y =
-  [ ( ( (fromIntegral x * tileSize) - ((1024 / 2) - (tileSize / 2))
-      , (fromIntegral y * tileSize) - ((768 / 2) - (tileSize / 2)))
-    , row !! x)
-  | x <- [0 .. length row - 1]
-  , row !! x == '*' || row !! x == '%'
-  ]
+scaleFactor :: Float -> Float
+scaleFactor size = fromIntegral(fst winSize-20) / size
 
-prepareData :: [String] -> Level
-prepareData rawData =
-  concat [makeRow (rawData !! y) y | y <- [0 .. length rawData - 1]]
+-- Resumidamente mapeia os dados recebidos para a função makeRow
+prepareData :: [(Integer, Integer, Char)] -> Level
+prepareData = map makeRow
 
-whatImg :: Cell -> Picture -> Picture -> Picture
-whatImg (_, cellType) tile food =
-  if cellType == '*'
-    then tile
-    else food
+-- Função que traduz os dados gerados para cordenadas na tela
+makeRow :: (Integer, Integer, Char) -> Cell
+makeRow (x,y,dir)
+   | dir == 'U' = (
+                    (c*(fromIntegral y-1)+c/2-offset, h-c*(fromIntegral x-1)-offset)
+                  , 'V')
+   | dir == 'D' = (
+                    (c*(fromIntegral y-1)+c/2-offset, h-c*fromIntegral x-offset)
+                  , 'V')
+   | dir == 'L' = (
+                    (c*(fromIntegral y-1)-offset, h-c/2-c*(fromIntegral x-1)-offset)
+                  , 'H')
+   | dir == 'R' = (
+                    (c*fromIntegral y-offset, h-c/2-c*(fromIntegral x-1)-offset)
+                  , 'H')
+   | otherwise = ((0,0), 'f')
+      where
+         c = scaleFactor (fromIntegral size)
+         h = c * fromIntegral size
 
-drawTile :: Cell -> Picture -> Picture -> Picture
-drawTile cell tileImg foodImg =
-  uncurry translate (fst cell) (whatImg cell tileImg foodImg)
-
+-- Metodo de renderização do gloss, transforma as paredes em imagens, e adiciona ainda o personagem em sua posição
+-- atual e o objetivo em uma posição fixa
 render :: GameState -> [Picture] -> Picture
 render gs imgs =
   pictures
     ([drawTile cell (head imgs) (imgs !! 1) | cell <- currentLevel gs] ++
-     [ translate
-         (fst (position gs))
-         (snd (position gs) + 10)
-         (imgs !! (spriteCount gs + 2 + isRight (heading gs)))
+     [ uncurry translate (position gs)
+         (imgs !! 3)
+     ] ++
+     [ uncurry translate goalPosition
+         (imgs !! 2)
      ])
 
-isRight :: Heading -> Int
-isRight FacingEast = 6
-isRight _ = 0
 
-incSprite :: GameState -> Int
-incSprite gs =
-  if direction gs /= None
-    then if spriteCount gs == 5
-           then 0
-           else spriteCount gs + 1
-    else spriteCount gs
+-- Desenha uma parede na tela do gloss
+drawTile :: Cell -> Picture -> Picture  -> Picture
+drawTile cell tileImg1 tileImg2 =
+  uncurry translate (fst cell) (whatImg cell tileImg1 tileImg2)
 
+-- Decide qual imagem vai ser usada na parede
+whatImg :: Cell -> Picture -> Picture -> Picture
+whatImg (point, cellType) tile1 tile2
+  | cellType == 'V' = tile1
+  | otherwise = tile2
+
+-- Metodo utilizado para lidar com os inputs de teclas
 handleKeys :: Event -> GameState -> GameState
 handleKeys (EventKey (SpecialKey KeyLeft) Down _ _) gs =
-  gs {direction = West, heading = FacingWest}
+  gs {direction = West}
 handleKeys (EventKey (SpecialKey KeyRight) Down _ _) gs =
-  gs {direction = East, heading = FacingEast}
-handleKeys (EventKey (SpecialKey KeySpace) Down _ _) gs =
-  gs
-    { speedY =
-        if isCollision gs (fst (position gs), snd (position gs) + speedY gs) '*'
-          then 6
-          else (-6)
-    }
+  gs {direction = East}
+handleKeys (EventKey (SpecialKey KeyUp ) Down _ _) gs =
+  gs {direction = North}
+handleKeys (EventKey (SpecialKey KeyDown ) Down _ _) gs =
+  gs {direction = South}
+handleKeys (EventKey ((Char '1') ) Down _ _) gs =
+  gs {position = initialPosition, currentLevel = prepareData level, generator = gen}
+    where (level, gen) = createMaze 25 (generator gs)
 handleKeys _ gs = gs {direction = None}
 
-checkFood :: GameState -> Level
-checkFood gs =
-  filter
-    (\cell -> not (isHit (fst cell) (position gs) && snd cell == '%'))
-    (currentLevel gs)
-
+-- Metodo que controla a velocidade vertical, aumentando gradualmente a medida que a tecla é segurada
 checkSpeedY :: GameState -> Float
 checkSpeedY gs
-  | isCollision gs (fst (position gs), snd (position gs) + speedY gs) '*' = -3
-  | speedY gs >= -6 = speedY gs - 0.1
-  | otherwise = -6
+  | direction gs == North || direction gs == South =
+    if speedY gs > 5.0
+      then 5.0
+      else speedY gs + 0.5
+  | otherwise = 0
 
+-- Metodo que controla a velocidade horizontal, aumentando gradualmente a medida que a tecla é segurada
 checkSpeedX :: GameState -> Float
 checkSpeedX gs
   | direction gs == West || direction gs == East =
     if speedX gs > 5.0
       then 5.0
       else speedX gs + 0.5
-  | otherwise =
-    if speedX gs <= 0
-      then 0
-      else speedX gs - 0.5
+  | otherwise = 0
 
-isCollision :: GameState -> Point -> CellType -> Bool
-isCollision gs pnt checkType =
-  any
-    (\((x, y), tileType) -> tileType == checkType && isHit pnt (x, y))
-    (currentLevel gs)
-
+-- Realiza o movimento horizontal a cada atualização de tela
 moveX :: MoveDirection -> GameState -> Point
 moveX East gs =
-  if not (isCollision gs (fst (position gs) + speedX gs, snd (position gs)) '*')
+  if not
+        (isCollision
+          gs
+          (fst (position gs) + speedX gs, snd (position gs))
+          ['H', 'V'])
     then (fst (position gs) + speedX gs, snd (position gs))
     else position gs
 moveX West gs =
@@ -150,92 +166,91 @@ moveX West gs =
        (isCollision
           gs
           (fst (position gs) + speedX gs * (-1), snd (position gs))
-          '*')
+          ['H', 'V'])
     then (fst (position gs) + speedX gs * (-1), snd (position gs))
     else position gs
-moveX _ gs =
-  if speedX gs > 0 &&
-     not
+moveX _ gs = position gs
+
+-- Realiza o movimento vertical a cada atualização de tela
+moveY :: MoveDirection -> GameState -> Point -> Point
+moveY North gs pnt =
+  if not
        (isCollision
           gs
-          ( fst (position gs) +
-            speedX gs *
-            (if heading gs == FacingWest
-               then (-1)
-               else 1)
-          , snd (position gs))
-          '*')
-    then ( fst (position gs) +
-           speedX gs *
-           (if heading gs == FacingWest
-              then (-1)
-              else 1)
-         , snd (position gs))
-    else position gs
-
-moveY :: GameState -> Point -> Point
-moveY gs pnt =
-  if not (isCollision gs (fst pnt, snd pnt + speedY gs) '*')
+          (fst pnt, snd pnt + speedY gs)
+          ['H', 'V'])
     then (fst pnt, snd pnt + speedY gs)
     else pnt
+moveY South gs pnt =
+  if not
+       (isCollision
+          gs
+          (fst pnt, snd pnt  + speedY gs * (-1))
+          ['H', 'V'])
+    then (fst pnt, snd pnt  + speedY gs * (-1))
+    else pnt
+moveY _ gs pnt = pnt
 
+-- Verifica se o personagem ira colidir com algum objeto, caso tente ir para determinado ponto
+isCollision :: GameState -> Point -> [CellType] -> Bool
+isCollision gs pnt checkType =
+  any
+    (\((x, y), tileType) -> tileType `elem` checkType && isHit pnt (x, y) tileType)
+    (currentLevel gs)
+
+-- Utilizando um pouco de geometria, esse metodo verifica se o personagem e algum objeto da tela colidem
+isHit :: Point -> Point -> CellType -> Bool
+isHit (b1x, b1y) (b2x, b2y) tipo =
+    b1x + 10 > b2x - width  && b1x - 10 < b2x + width &&
+    b1y + 10 > b2y - height && b1y - 10 < b2y + height
+    where
+      (width, height)
+        | tipo == 'H' = (2, 18)
+        | tipo == 'V' = (18, 2)
+        | otherwise = (10, 10)
+
+-- Atualiza o estado do jogo a cada iteração
 update :: Float -> GameState -> GameState
 update _ gs =
   gs
     { speedY = checkSpeedY gs
     , speedX = checkSpeedX gs
-    , position = moveY gs $ moveX (direction gs) gs
-    , spriteCount = incSprite gs
-    , currentLevel = checkFood gs
+    , position = pos
+    , currentLevel = actualLevel
+    , generator = gen
     }
+    where fingCase = isHit (position gs) goalPosition 'G'
+          (level, gen) = if fingCase then createMaze size (generator gs) else ([], generator gs)
+          actualLevel = if fingCase then prepareData level else currentLevel gs
+          pos = if fingCase then initialPosition else moveY (direction gs) gs $ moveX (direction gs) gs
+
 
 main :: IO ()
 main = do
-  tileImg <- loadBMP "assets/tile.bmp"
-  foodImg <- loadBMP "assets/food.bmp"
-  left1 <- loadBMP "assets/left1.bmp"
-  left2 <- loadBMP "assets/left2.bmp"
-  left3 <- loadBMP "assets/left3.bmp"
-  left4 <- loadBMP "assets/left4.bmp"
-  left5 <- loadBMP "assets/left5.bmp"
-  left6 <- loadBMP "assets/left6.bmp"
-  right1 <- loadBMP "assets/right1.bmp"
-  right2 <- loadBMP "assets/right2.bmp"
-  right3 <- loadBMP "assets/right3.bmp"
-  right4 <- loadBMP "assets/right4.bmp"
-  right5 <- loadBMP "assets/right5.bmp"
-  right6 <- loadBMP "assets/right6.bmp"
-  rawData <- readFile "assets/level"
-  let level = prepareData $ reverse $ lines rawData
+  lase1Img <- loadBMP "assets/lazer1.bmp"
+  lase2Img <- loadBMP "assets/lazer2.bmp"
+  caseImg <- loadBMP "assets/case.bmp"
+  char <- loadBMP "assets/spy.bmp"
+  seed <- randomIO :: IO Int
+  let (level, gen) = createMaze 25 (getRandomGen seed)
   let state =
         GameState
-          { position = (0.0, 0.0)
+          { position = initialPosition
           , direction = None
-          , currentLevel = level
-          , spriteCount = 0
-          , heading = FacingWest
+          , currentLevel = prepareData level
           , speedX = 0
-          , speedY = (-6)
+          , speedY = 0
+          , generator = gen
           }
   play
     window
     background
     fps
     state
-    (`render` [ tileImg
-              , foodImg
-              , left1
-              , left2
-              , left3
-              , left4
-              , left5
-              , left6
-              , right1
-              , right2
-              , right3
-              , right4
-              , right5
-              , right6
+    (`render` [ lase1Img
+              , lase2Img
+              , caseImg
+              , char
               ])
     handleKeys
     update
