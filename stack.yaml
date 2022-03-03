@@ -4,3 +4,8 @@ packages:
   - .
 extra-deps:
   - gloss-1.13.1.2
+  - regex-posix-clib-2.7
+
+flags:
+  regex-posix:
+    _regex-posix-clib: true

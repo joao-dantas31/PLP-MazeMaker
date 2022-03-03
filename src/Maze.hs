@@ -6,8 +6,8 @@ import System.Random
 import Utils
 
 -- | Create a maze.
-createMaze :: Int -> StdGen -> [(Integer, Integer, Char)]
-createMaze gridSize randomGen = maze
+createMaze :: Int -> StdGen -> ([(Integer, Integer, Char)], StdGen)
+createMaze gridSize randomGen = (maze, nextGen)
    where gridInteger = num gridSize
          randomMaze = getMaze gridInteger randomGen
          maze = toList $ fst $ randomMaze 
