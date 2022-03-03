@@ -4,14 +4,13 @@
 module Main where
 
 import Graphics.Gloss
-
 import Graphics.Gloss.Interface.Pure.Game
-
 import Maze
 import System.Random
 import System.Environment
 import Data.Int
 
+-- Definição dos tipos usados
 data MoveDirection
   = East
   | West
@@ -36,6 +35,7 @@ type Cell = (Point, CellType)
 
 type Level = [Cell]
 
+-- Definição de alguns valores fixos e funções uteis
 tileSize :: Float
 tileSize = 10
 
@@ -63,6 +63,17 @@ background = makeColor 0.9 0.9 0.9 1
 fps :: Int
 fps = 60
 
+getRandomGen :: Int -> StdGen
+getRandomGen = mkStdGen
+
+scaleFactor :: Float -> Float
+scaleFactor size = fromIntegral(fst winSize-20) / size
+
+-- Resumidamente mapeia os dados recebidos para a função makeRow
+prepareData :: [(Integer, Integer, Char)] -> Level
+prepareData = map makeRow
+
+-- Função que traduz os dados gerados para cordenadas na tela
 makeRow :: (Integer, Integer, Char) -> Cell
 makeRow (x,y,dir)
    | dir == 'U' = (
@@ -82,18 +93,8 @@ makeRow (x,y,dir)
          c = scaleFactor (fromIntegral size)
          h = c * fromIntegral size
 
-prepareData :: [(Integer, Integer, Char)] -> Level
-prepareData = map makeRow
-
-whatImg :: Cell -> Picture -> Picture -> Picture
-whatImg (point, cellType) tile1 tile2
-  | cellType == 'V' = tile1
-  | otherwise = tile2
-
-drawTile :: Cell -> Picture -> Picture  -> Picture
-drawTile cell tileImg1 tileImg2 =
-  uncurry translate (fst cell) (whatImg cell tileImg1 tileImg2)
-
+-- Metodo de renderização do gloss, transforma as paredes em imagens, e adiciona ainda o personagem em sua posição
+-- atual e o objetivo em uma posição fixa
 render :: GameState -> [Picture] -> Picture
 render gs imgs =
   pictures
@@ -105,6 +106,19 @@ render gs imgs =
          (imgs !! 2)
      ])
 
+
+-- Desenha uma parede na tela do gloss
+drawTile :: Cell -> Picture -> Picture  -> Picture
+drawTile cell tileImg1 tileImg2 =
+  uncurry translate (fst cell) (whatImg cell tileImg1 tileImg2)
+
+-- Decide qual imagem vai ser usada na parede
+whatImg :: Cell -> Picture -> Picture -> Picture
+whatImg (point, cellType) tile1 tile2
+  | cellType == 'V' = tile1
+  | otherwise = tile2
+
+-- Metodo utilizado para lidar com os inputs de teclas
 handleKeys :: Event -> GameState -> GameState
 handleKeys (EventKey (SpecialKey KeyLeft) Down _ _) gs =
   gs {direction = West}
@@ -119,6 +133,7 @@ handleKeys (EventKey ((Char '1') ) Down _ _) gs =
     where (level, gen) = createMaze 25 (generator gs)
 handleKeys _ gs = gs {direction = None}
 
+-- Metodo que controla a velocidade vertical, aumentando gradualmente a medida que a tecla é segurada
 checkSpeedY :: GameState -> Float
 checkSpeedY gs
   | direction gs == North || direction gs == South =
@@ -127,6 +142,7 @@ checkSpeedY gs
       else speedY gs + 0.5
   | otherwise = 0
 
+-- Metodo que controla a velocidade horizontal, aumentando gradualmente a medida que a tecla é segurada
 checkSpeedX :: GameState -> Float
 checkSpeedX gs
   | direction gs == West || direction gs == East =
@@ -135,25 +151,7 @@ checkSpeedX gs
       else speedX gs + 0.5
   | otherwise = 0
 
-
-isHit :: Point -> Point -> CellType -> Bool
-isHit (b1x, b1y) (b2x, b2y) tipo =
-    b1x + 10 > b2x - width  && b1x - 10 < b2x + width &&
-    b1y + 10 > b2y - height && b1y - 10 < b2y + height
-    where
-      (width, height) = if tipo == 'H' then (2, 18) else (18, 2)
-
-isHitGoal :: Point -> Point -> Bool
-isHitGoal (b1x, b1y) (b2x, b2y) =
-    b1x + 10 > b2x - 10  && b1x - 10 < b2x + 10 &&
-    b1y + 10 > b2y - 10 && b1y - 10 < b2y + 10
-
-isCollision :: GameState -> Point -> [CellType] -> Bool
-isCollision gs pnt checkType =
-  any
-    (\((x, y), tileType) -> tileType `elem` checkType && isHit pnt (x, y) tileType)
-    (currentLevel gs)
-
+-- Realiza o movimento horizontal a cada atualização de tela
 moveX :: MoveDirection -> GameState -> Point
 moveX East gs =
   if not
@@ -173,6 +171,7 @@ moveX West gs =
     else position gs
 moveX _ gs = position gs
 
+-- Realiza o movimento vertical a cada atualização de tela
 moveY :: MoveDirection -> GameState -> Point -> Point
 moveY North gs pnt =
   if not
@@ -192,6 +191,25 @@ moveY South gs pnt =
     else pnt
 moveY _ gs pnt = pnt
 
+-- Verifica se o personagem ira colidir com algum objeto, caso tente ir para determinado ponto
+isCollision :: GameState -> Point -> [CellType] -> Bool
+isCollision gs pnt checkType =
+  any
+    (\((x, y), tileType) -> tileType `elem` checkType && isHit pnt (x, y) tileType)
+    (currentLevel gs)
+
+-- Utilizando um pouco de geometria, esse metodo verifica se o personagem e algum objeto da tela colidem
+isHit :: Point -> Point -> CellType -> Bool
+isHit (b1x, b1y) (b2x, b2y) tipo =
+    b1x + 10 > b2x - width  && b1x - 10 < b2x + width &&
+    b1y + 10 > b2y - height && b1y - 10 < b2y + height
+    where
+      (width, height)
+        | tipo == 'H' = (2, 18)
+        | tipo == 'V' = (18, 2)
+        | otherwise = (10, 10)
+
+-- Atualiza o estado do jogo a cada iteração
 update :: Float -> GameState -> GameState
 update _ gs =
   gs
@@ -201,19 +219,11 @@ update _ gs =
     , currentLevel = actualLevel
     , generator = gen
     }
-    where fingCase = isHitGoal (position gs) goalPosition
+    where fingCase = isHit (position gs) goalPosition 'G'
           (level, gen) = if fingCase then createMaze size (generator gs) else ([], generator gs)
           actualLevel = if fingCase then prepareData level else currentLevel gs
           pos = if fingCase then initialPosition else moveY (direction gs) gs $ moveX (direction gs) gs
 
-getRandomGen :: Int -> StdGen
-getRandomGen = mkStdGen
-
-wall :: Float -> Float -> Picture
-wall w h = color black (rectangleSolid w h)
-
-scaleFactor :: Float -> Float
-scaleFactor size = fromIntegral(fst winSize-20) / size
 
 main :: IO ()
 main = do
