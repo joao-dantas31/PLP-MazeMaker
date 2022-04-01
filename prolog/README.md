@@ -4,7 +4,7 @@ Link da especificação inicial do projeto: https://docs.google.com/document/d/1
 
 ## Contexto:
 
-Infelizmente dos 5 integrantes apenas 2 contribuiram para o projeto, por isso ele estão mais simples que o especificado.
+Infelizmente dos 5 integrantes apenas 1 contribuiram para o projeto, por isso ele estão mais simples que o especificado.
 
 ## Instalação:
 
@@ -16,20 +16,24 @@ Nenhuma biblioteca adicional foi utilizada, apenas as já presente no SWI-Prolog
 
 ### Windons
 
-Basta rodar:
+Basta rodar no SWI-Prolog:
 
 ```
-stack build --exec mazemaker-exe
+working_directory(CWD, 'diretorio dos arquivos .pl').
+[maze].
+main.
 ```
+
+### Linux
+
+Não tive tempo de testar no linux, mas creio que seja só rodar o `maze.pl`
 
 ## Explicação:
 
 ### Gerador:
 
-Não tem muito o que falar, foi tudo pego de outro [projeto](https://github.com/CPSC-312-Haskell-Project/mazekell "Mazekell"), e a pessoa que pegou não faz a minima ideia de como funciona.
+Basicamente é usada uma DFS para gerar um grafo aleatório a partir de uma célula aleatória, e com isso garantimos que o labirinto gerado sempre tem uma solução.
 
 ### Interface:
 
-Foi utilizado o Gloss biblioteca e o seguimos este [tutorial](https://blog.jayway.com/2020/11/01/making-a-small-game-with-gloss/) como base.
-
-A logica basica do projeto é transformar tudo em [Pictures](https://hackage.haskell.org/package/gloss-1.13.2.1/docs/Graphics-Gloss-Data-Picture.html), um objeto da biblioteca Gloss que carrega uma posição cartesiana e uma imagem, e desenhar tudo na janela do app.
+Foi utilizado a biblioteca [XPCE](https://www.swi-prolog.org/packages/xpce/) pra gerar a interface visual. No começo um grid é gerado com todas as linhas do labirinto, e a medida que o algoritmo de DFS vai caminhando pelo labirinto ele vai apagando as linhas entre as célula.
